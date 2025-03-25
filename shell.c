@@ -16,6 +16,16 @@ void tokenize(char input[], char *args[]){
     args[i] = NULL;
 }
 
+void tokenizeBars(char input[], char *args[]){
+    int i = 0;
+    char *token = strtok(input, " | ");
+    while (token != NULL && i < 9) {
+        args[i++] = token;
+        token = strtok(NULL, " | ");
+    }
+    args[i] = NULL;
+}
+
 void handle_redirect(int left, char leftSide[], char rightSide[]){
     if(strstr(leftSide, "<") != NULL || strstr(leftSide, ">") != NULL){
         // leftSide = handle_redirect();
@@ -119,8 +129,51 @@ void handle_double_redirect(char *command){
     waitpid(pid, NULL, 0);
 }
 
-void execute_pipeline(){
+void execute(char commands[], char *args[]){ // need to finish for  | commands
+    if(strchr(commands, '<') != NULL && strchr(commands, '>') != NULL){
+        handle_double_redirect(commands);
+    }
+    else if (strchr(commands, '<') != NULL) {
+        char *leftSide = strtok(commands, "<");
+        char *rightSide = strtok(NULL, "<");
 
+        leftSide[strcspn(leftSide, "\n")] = 0;
+        rightSide[strcspn(rightSide, "\n")] = 0;
+        while (*rightSide == ' ') rightSide++;
+
+        handle_redirect(1, leftSide, rightSide);
+    }
+    else if (strchr(commands, '>') != NULL) {
+        char *leftSide = strtok(commands, ">");
+        char *rightSide = strtok(NULL, ">");
+
+        leftSide[strcspn(leftSide, "\n")] = 0;
+        rightSide[strcspn(rightSide, "\n")] = 0;
+        while (*rightSide == ' ') rightSide++;
+
+        handle_redirect(0, leftSide, rightSide);
+    }
+    else{
+        execvp(args[0], args);
+    }
+}
+
+int findBars(char commands[], int indexes[]) {
+    int count = 0;
+    for (int i = 0; commands[i] != '\0'; i++) {
+        if (commands[i] == '|') {
+            indexes[count++] = i;
+        }
+    }
+    return count;
+}
+
+int countCommands(char *commands[]) {
+    int count = 0;
+    while (commands[count] != NULL) {
+        count++;
+    }
+    return count;
 }
 
 int main(){
@@ -139,32 +192,11 @@ int main(){
             exit(0);
         }
 
-        if(strchr(commands, '<') != NULL && strchr(commands, '>') != NULL){
-            handle_double_redirect(commands);
-            continue;
-        }
-
-        if (strchr(commands, '<') != NULL) {
-            char *leftSide = strtok(commands, "<");
-            char *rightSide = strtok(NULL, "<");
-
-            leftSide[strcspn(leftSide, "\n")] = 0;
-            rightSide[strcspn(rightSide, "\n")] = 0;
-            while (*rightSide == ' ') rightSide++;
-
-            handle_redirect(1, leftSide, rightSide);
-            continue;
-        }
-
-        if (strchr(commands, '>') != NULL) {
-            char *leftSide = strtok(commands, ">");
-            char *rightSide = strtok(NULL, ">");
-
-            leftSide[strcspn(leftSide, "\n")] = 0;
-            rightSide[strcspn(rightSide, "\n")] = 0;
-            while (*rightSide == ' ') rightSide++;
-
-            handle_redirect(0, leftSide, rightSide);
+        if(strcmp(commands, "time") == 0){
+            time_t t;
+            time(&t);
+            char *current_time = ctime(&t);
+            printf("%s", current_time);
             continue;
         }
 
@@ -176,22 +208,73 @@ int main(){
             }
             continue;
         }
+        if(strchr(commands, '|') == NULL){
+            printf("%s", commands);
+            printf("no bar\n\n");
+            pid_t pid;
+            if ((pid = fork()) == 0) {
+                execute(commands, args);
+                perror("execution failed");
+                exit(1); // exit the child if exec fails
+            }
+            waitpid(pid, NULL, 0);
+        }else{
+            char *barFuncs[10];
+            tokenizeBars(commands, barFuncs);
 
-        if(strcmp(args[0], "time") == 0){
-            time_t t;
-            time(&t);
-            char *current_time = ctime(&t);
-            printf("%s", current_time);
-            continue;
-        }
+            int numCommands = countCommands(barFuncs);
+            int pipes[numCommands - 1][2]; // an array of pipes
 
-        pid_t pid;
-        if ((pid = fork()) == 0) {
-            execvp(args[0], args);
-            perror("execution failed");
-            exit(1); // exit the child if exec fails
+            for (int i = 0; i < numCommands - 1; i++) {
+                pipe(pipes[i]);
+            }
+
+            int i = 0;
+            
+            while(barFuncs[i] != NULL){
+                char *args[10];
+                tokenize(barFuncs[i], args);
+                if(i == 0){
+                    printf("%s, %s", barFuncs[i], args[0]);
+                    pid_t pid;
+                    if((pid = fork()) == 0){ 
+                        dup2(pipes[i][1], 1);
+                        close(pipes[i][0]);
+                        close(pipes[i][1]);
+                        execute(barFuncs[i], args);
+                    }
+                    waitpid(pid, NULL, 0);
+                    i += 1;
+                    continue;
+                }else if(barFuncs[i+1] == NULL){
+                    pid_t pid;
+                    if((pid = fork()) == 0){
+                        dup2(pipes[i][0], 0);
+                        close(pipes[i][0]);
+                        close(pipes[i][1]);
+                        execute(barFuncs[i], args);
+                    }
+                    waitpid(pid, NULL, 0);
+                    break;
+                }else{
+                    pid_t pid;
+                    if((pid = fork()) == 0){ 
+                        dup2(pipes[i][0], 0);
+                        close(pipes[i][0]);
+                        close(pipes[i][1]);
+                        dup2(pipes[i+1][1], 1);
+                        close(pipes[i+1][0]);
+                        close(pipes[i+1][1]);
+                        execute(barFuncs[i], args);
+                    }
+                    waitpid(pid, NULL, 0);
+                    close(pipes[i][0]);
+                    i += 1;
+                    close(pipes[i][1]);
+                    continue;
+                }
+            }
         }
-        waitpid(pid, NULL, 0);
     }
     
     return 0;
