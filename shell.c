@@ -18,10 +18,18 @@ void tokenize(char input[], char *args[]){
 
 void tokenizeBars(char input[], char *args[]){
     int i = 0;
-    char *token = strtok(input, " | ");
+    char *token = strtok(input, "|");
     while (token != NULL && i < 9) {
+        while (*token == ' ') token++;
+
+        char *end = token + strlen(token) - 1;
+        while (end > token && (*end == ' ' || *end == '\t')) {
+            *end = '\0';
+            end--;
+        }
+
         args[i++] = token;
-        token = strtok(NULL, " | ");
+        token = strtok(NULL, "|");
     }
     args[i] = NULL;
 }
@@ -35,43 +43,32 @@ void handle_redirect(int left, char leftSide[], char rightSide[]){
     }
 
     if(left){
-        pid_t pid;
-        if((pid = fork()) == 0){
-            int fd = open(rightSide, O_RDONLY);
+        int fd = open(rightSide, O_RDONLY);
 
-            if (fd < 0) {
-                perror("open failed");
-                exit(1);
-            }
-
-            dup2(fd, 0);
-            close(fd);
-            char *args[10];
-            tokenize(leftSide, args);
-            execvp(args[0], args);
-            perror("exec failed");
+        if (fd < 0) {
+            perror("open failed");
             exit(1);
         }
-        waitpid(pid, NULL, 0);
-    }else{
-        pid_t pid;
-        if((pid = fork()) == 0){
-            int fd = open(rightSide, O_WRONLY);
 
-            if (fd < 0) {
-                perror("open failed");
-                exit(1);
-            }
+        dup2(fd, 0);
+        close(fd);
+        char *args[10];
+        tokenize(leftSide, args);
+        execvp(args[0], args);
+    }
+    else{
+        int fd = open(rightSide, O_WRONLY);
 
-            dup2(fd, 1);
-            close(fd);
-            char *args[10];
-            tokenize(leftSide, args);
-            execvp(args[0], args);
-            perror("exec failed");
+        if (fd < 0) {
+            perror("open failed");
             exit(1);
         }
-        waitpid(pid, NULL, 0);
+
+        dup2(fd, 1);
+        close(fd);
+        char *args[10];
+        tokenize(leftSide, args);
+        execvp(args[0], args);
     }
 }
 
@@ -187,7 +184,6 @@ int main(){
         printf("> ");
         fgets(commands, sizeof(commands), stdin);
         commands[strcspn(commands, "\n")] = 0;
-
         if(strcmp(commands, "exit") == 0){
             exit(0);
         }
@@ -199,8 +195,9 @@ int main(){
             printf("%s", current_time);
             continue;
         }
-
-        tokenize(commands, args);
+        char input[100];
+        strcpy(input, commands);
+        tokenize(input, args);
 
         if(strcmp(args[0], "cd") == 0){
             if (chdir(args[1]) != 0) {
@@ -209,13 +206,9 @@ int main(){
             continue;
         }
         if(strchr(commands, '|') == NULL){
-            printf("%s", commands);
-            printf("no bar\n\n");
             pid_t pid;
             if ((pid = fork()) == 0) {
                 execute(commands, args);
-                perror("execution failed");
-                exit(1); // exit the child if exec fails
             }
             waitpid(pid, NULL, 0);
         }else{
@@ -229,50 +222,49 @@ int main(){
                 pipe(pipes[i]);
             }
 
-            int i = 0;
-            
-            while(barFuncs[i] != NULL){
+            pid_t pids[10];  // Store child PIDs to wait for later
+
+            for (int i = 0; i < numCommands; i++) {
                 char *args[10];
-                tokenize(barFuncs[i], args);
-                if(i == 0){
-                    printf("%s, %s", barFuncs[i], args[0]);
-                    pid_t pid;
-                    if((pid = fork()) == 0){ 
+                char temp[100];
+                strcpy(temp, barFuncs[i]);
+                tokenize(temp, args);
+
+                pid_t pid = fork();
+                if (pid == 0) {
+                    // If not the first command, connect input to previous pipe
+                    if (i > 0) {
+                        dup2(pipes[i - 1][0], 0);
+                    }
+
+                    // If not the last command, connect output to current pipe
+                    if (i < numCommands - 1) {
                         dup2(pipes[i][1], 1);
-                        close(pipes[i][0]);
-                        close(pipes[i][1]);
-                        execute(barFuncs[i], args);
                     }
-                    waitpid(pid, NULL, 0);
-                    i += 1;
-                    continue;
-                }else if(barFuncs[i+1] == NULL){
-                    pid_t pid;
-                    if((pid = fork()) == 0){
-                        dup2(pipes[i][0], 0);
-                        close(pipes[i][0]);
-                        close(pipes[i][1]);
-                        execute(barFuncs[i], args);
+
+                    // Close all pipes in child
+                    for (int j = 0; j < numCommands - 1; j++) {
+                        close(pipes[j][0]);
+                        close(pipes[j][1]);
                     }
-                    waitpid(pid, NULL, 0);
-                    break;
-                }else{
-                    pid_t pid;
-                    if((pid = fork()) == 0){ 
-                        dup2(pipes[i][0], 0);
-                        close(pipes[i][0]);
-                        close(pipes[i][1]);
-                        dup2(pipes[i+1][1], 1);
-                        close(pipes[i+1][0]);
-                        close(pipes[i+1][1]);
-                        execute(barFuncs[i], args);
-                    }
-                    waitpid(pid, NULL, 0);
-                    close(pipes[i][0]);
-                    i += 1;
-                    close(pipes[i][1]);
-                    continue;
+
+                    execute(barFuncs[i], args);
+                    perror("exec failed");
+                    exit(1);
+                } else {
+                    pids[i] = pid; // store PID
                 }
+            }
+
+            // Close all pipes in parent
+            for (int i = 0; i < numCommands - 1; i++) {
+                close(pipes[i][0]);
+                close(pipes[i][1]);
+            }
+
+            // Wait for all children
+            for (int i = 0; i < numCommands; i++) {
+                waitpid(pids[i], NULL, 0);
             }
         }
     }
