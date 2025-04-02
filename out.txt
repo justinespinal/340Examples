@@ -1,5 +1,5 @@
-    272     803    7403
-lude <stdio.h>
+#include <unistd.h>
+#include <stdio.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <string.h>
@@ -98,32 +98,28 @@ void handle_double_redirect(char *command){
     inputFile[strcspn(inputFile, "\n")] = 0;
     outputFile[strcspn(outputFile, "\n")] = 0;
 
-    pid_t pid;
-    if((pid = fork()) == 0){
-        int read_fd = open(inputFile, O_RDONLY);
-        if (read_fd < 0) {
-            perror("input file open failed");
-            exit(1);
-        }
-
-        int write_fd = open(outputFile, O_WRONLY);
-        if (write_fd < 0) {
-            perror("input file open failed");
-            exit(1);
-        }
-
-        dup2(read_fd, 0);
-        close(read_fd);
-        dup2(write_fd, 1);
-        close(write_fd);
-
-        char *args[10];
-        tokenize(commandPart, args);
-        execvp(args[0], args);
-        perror("exec failed");
+    int read_fd = open(inputFile, O_RDONLY);
+    if (read_fd < 0) {
+        perror("input file open failed");
         exit(1);
     }
-    waitpid(pid, NULL, 0);
+
+    int write_fd = open(outputFile, O_WRONLY);
+    if (write_fd < 0) {
+        perror("input file open failed");
+        exit(1);
+    }
+
+    dup2(read_fd, 0);
+    close(read_fd);
+    dup2(write_fd, 1);
+    close(write_fd);
+
+    char *args[10];
+    tokenize(commandPart, args);
+    execvp(args[0], args);
+    perror("exec failed");
+    exit(1);
 }
 
 void execute(char commands[], char *args[]){ // need to finish for  | commands
@@ -263,6 +259,14 @@ int main(){
             }
 
             // Wait for all children
+            for (int i = 0; i < numCommands; i++) {
+                waitpid(pids[i], NULL, 0);
+            }
+        }
+    }
+    
+    return 0;
+}hildren
             for (int i = 0; i < numCommands; i++) {
                 waitpid(pids[i], NULL, 0);
             }
