@@ -35,13 +35,6 @@ void tokenizeBars(char input[], char *args[]){
 }
 
 void handle_redirect(int left, char leftSide[], char rightSide[]){
-    if(strstr(leftSide, "<") != NULL || strstr(leftSide, ">") != NULL){
-        // leftSide = handle_redirect();
-    }
-    if(strstr(rightSide, "<") != NULL || strstr(rightSide, ">") != NULL){
-        // rightSide = handle_redirect();
-    }
-
     if(left){
         int fd = open(rightSide, O_RDONLY);
 
@@ -98,32 +91,28 @@ void handle_double_redirect(char *command){
     inputFile[strcspn(inputFile, "\n")] = 0;
     outputFile[strcspn(outputFile, "\n")] = 0;
 
-    pid_t pid;
-    if((pid = fork()) == 0){
-        int read_fd = open(inputFile, O_RDONLY);
-        if (read_fd < 0) {
-            perror("input file open failed");
-            exit(1);
-        }
-
-        int write_fd = open(outputFile, O_WRONLY);
-        if (write_fd < 0) {
-            perror("input file open failed");
-            exit(1);
-        }
-
-        dup2(read_fd, 0);
-        close(read_fd);
-        dup2(write_fd, 1);
-        close(write_fd);
-
-        char *args[10];
-        tokenize(commandPart, args);
-        execvp(args[0], args);
-        perror("exec failed");
+    int read_fd = open(inputFile, O_RDONLY);
+    if (read_fd < 0) {
+        perror("input file open failed");
         exit(1);
     }
-    waitpid(pid, NULL, 0);
+
+    int write_fd = open(outputFile, O_WRONLY);
+    if (write_fd < 0) {
+        perror("input file open failed");
+        exit(1);
+    }
+
+    dup2(read_fd, 0);
+    close(read_fd);
+    dup2(write_fd, 1);
+    close(write_fd);
+
+    char *args[10];
+    tokenize(commandPart, args);
+    execvp(args[0], args);
+    perror("exec failed");
+    exit(1);
 }
 
 void execute(char commands[], char *args[]){ // need to finish for  | commands
