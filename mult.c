@@ -4,6 +4,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 typedef struct ThreadParam {
     int tid;
@@ -49,7 +50,11 @@ void* threadFunction(void* arg){
 void writeToFile(FILE* file, int **matrix, int n){
     for(int i = 0; i < n; i++){
         for(int j = 0; j < n; j++){
-            fprintf(file, "%d\n", matrix[i][j]);
+            if(i == n-1 && j == n-1){
+                fprintf(file, "%d", matrix[i][j]);
+            }else{
+                fprintf(file, "%d\n", matrix[i][j]);
+            }
         }
     }
 }
@@ -105,11 +110,10 @@ int main(int argc, char *argv[]){
     for(int i = 0; i < n; i++) {
         matrixC[i] = malloc(n * sizeof(int));
     }   
-
+    
     int rows[numThreads+1];
     for(int i = 0; i <= numThreads; i++){
         rows[i] = i * (n/numThreads);
-        printf("%d\n",rows[i]);
     }
 
     ThreadParam params[numThreads];
@@ -129,6 +133,9 @@ int main(int argc, char *argv[]){
         currentRow += rowsForThread;
     }
 
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+
     pthread_t threads[numThreads];
     for(int i = 0; i<numThreads; i++){
         pthread_create(&threads[i], NULL, threadFunction, &params[i]);
@@ -137,6 +144,14 @@ int main(int argc, char *argv[]){
     for (int i = 0; i < numThreads; i++) {
         pthread_join(threads[i], NULL);
     }
+
+    gettimeofday(&end, NULL);
+
+    long seconds = end.tv_sec - start.tv_sec;
+    long microseconds = end.tv_usec - start.tv_usec;
+    double elapsed = seconds + microseconds*1e-6;
+
+    printf("Execution time: %.6f seconds\n", elapsed);
 
     writeToFile(fileC, matrixC, n);
 
