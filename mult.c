@@ -155,5 +155,21 @@ int main(int argc, char *argv[]){
 
     writeToFile(fileC, matrixC, n);
 
+    // Free allocated memory
+    for (int i = 0; i < n; i++) {
+        free(matrixA[i]);
+        free(matrixB[i]);
+        free(matrixC[i]);
+    }
+    free(matrixA);
+    free(matrixB);
+    free(matrixC);
+
+    // Close file handles
+    fclose(fileA);
+    fclose(fileB);
+    fclose(fileC);
+
+
     return 0;
 }
