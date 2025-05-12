@@ -1,3 +1,5 @@
+import java.io.File;
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -32,7 +34,7 @@ public class FCFS {
         int curr = 0;
         int processesCompleted = 0;
         Queue<HashMap<String, Integer>> queue = new LinkedList<>();
-        while (processesCompleted < 5) { 
+        while (processesCompleted < processes.size()) { 
             while(curr < processes.size() && processes.get(curr).get("AT")==time){
                 queue.add(processes.get(curr));
                 curr += 1;
@@ -56,6 +58,24 @@ public class FCFS {
         for(HashMap<String, Integer> map: p){
             System.out.println(map.get("ID")+","+map.get("AT")+","+map.get("FT")+","+map.get("TA"));
         }
-        System.out.println("===================");
+        write(p);
+    }
+
+    public void write(ArrayList<HashMap<String, Integer>> p){
+        try {
+            String fileName = "out2.txt";
+            File file = new File(fileName);
+            FileWriter writer = new FileWriter(file);
+
+            for(int i = 0; i < p.size(); i++){
+                HashMap<String, Integer> map = p.get(i);
+                String content = map.get("ID")+","+map.get("AT")+","+map.get("FT")+","+map.get("TA")+"\n";
+                writer.write(content);
+            }
+            writer.close();
+        } catch (Exception e) {
+            System.out.println("An error occurred.");
+            e.printStackTrace();
+        }
     }
 }

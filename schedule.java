@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Scanner;
 
-public class Scheduling{
+public class schedule{
 
     public static ArrayList<HashMap<String, Integer>> loadProcesses(String f){
         ArrayList<HashMap<String, Integer>> processes = new ArrayList<>();
@@ -31,29 +31,29 @@ public class Scheduling{
     }
 
     public static void main(String args[]){
-        System.out.println("Running Scheduling Algorithms!\n===================");
-        String algorithm = args[0];
-        String file = args[1];
+        String file = args[0];
+        String algorithm = args[1];
 
-        if(algorithm.equals("FCFS")){
+
+        if(algorithm.equals("fcfs")){
             ArrayList<HashMap<String, Integer>> processesFCFS = loadProcesses(file);
             FCFS fcfs = new FCFS(processesFCFS);
             fcfs.run();
         }
 
-        if(algorithm.equals("SRTF")){
+        if(algorithm.equals("srtf")){
             ArrayList<HashMap<String, Integer>> processesSRTF = loadProcesses(file);
             SRTF srtf = new SRTF(processesSRTF);
             srtf.run();
         }
 
-        if(algorithm.equals("PP")){
+        if(algorithm.equals("pri")){
             ArrayList<HashMap<String, Integer>> processesPP = loadProcesses(file);
             PP pp = new PP(processesPP);
             pp.run();
         }
 
-        if(algorithm.equals("RR")){
+        if(algorithm.equals("rr")){
             ArrayList<HashMap<String, Integer>> processesRR = loadProcesses(file);
             int TQ = Integer.parseInt(args[2]);
             RR rr = new RR(processesRR, TQ);
